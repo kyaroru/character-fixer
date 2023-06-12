@@ -86,6 +86,7 @@ export default function Home() {
         </div>
       </div>
       <div className="mt-4 mb-8">Enjoy your day!</div>
+      <div>Credits goes to <a className="text-pink-400" href="https://superuser.com/questions/894999/how-can-i-find-out-the-encoding-of-this-corrupted-chinese-text-which-an-online">this amazing thread</a> for the explanation! </div>
     </main>
   );
 }
