@@ -2,26 +2,29 @@
 
 import Image from "next/image";
 import iconv from "iconv-lite";
-import { useState } from "react";
+import { useRef, useState } from "react";
 import bear1 from "public/images/bear1.png";
 
 export default function Home() {
   const [input, setInput] = useState("ÄãºÃÎÒÊÇ¼ÒÀÖ");
   const [removeSpace, setRemoveSpace] = useState(true);
+  const originalTextRef = useRef(null);
+  const formattedTextRef = useRef(null);
+  const cp936TextRef = useRef(null);
+  const utf16TextRef = useRef(null);
+  const resultTextRef = useRef(null);
 
-  const getHex = (lines: string[]) => {
+  const getUtfHex = (lines: string[]) => {
     return lines.map((line, index) => {
-      const lineHex = line.replace(/\s/g, ""); //todo: update when added convert white space option
+      const lineHex = line.replace(" ", ""); //todo: update when added convert white space option
       const hexArray = iconv
         .encode(lineHex, "utf-16be")
         .toString("hex")
         .match(/.{4}/g);
-
       const prefixed = hexArray?.map((hex, index) => {
         const actualHex = "\\u" + Buffer.from(hex, "hex").toString("hex");
         return actualHex;
       });
-      // console.log(prefixed);
       const prefixedLine = !removeSpace
         ? prefixed?.join(" ")
         : prefixed?.join("");
@@ -29,81 +32,66 @@ export default function Home() {
     });
   };
 
-  const convertGarbled = (garbled: string) => {
-    // console.log("----------------------------------------");
-    // console.log(`converting garbled text...`);
-
-    // Split the garbled text into lines
-    const lines = removeSpace
-      ? garbled.replace(" ", "").split("\n")
-      : garbled.split("\n");
-    // console.log(`garbled lines: `);
-    // console.log(lines);
-
-    // Convert each line to UTF-16 representation
-    const utf16Lines = lines.map((line) =>
-      iconv.encode(line, "utf-16be").toString("hex")
-    );
-
-    // console.log(`encoded into utf-16be: `);
-    // console.log(utf16Lines);
-
-    // Remove leading zeros and combine UTF-16 pairs in each line
-    const cp936PairHexLines = utf16Lines.map((line, index) => {
+  const getCP936Hex = (lines: string[]) => {
+    return lines.map((line, index) => {
       const array = !removeSpace
         ? line.replace(/0020/g, "").replace(/00/g, "").match(/.{4}/g)
         : line.replace(/00/g, "").match(/.{4}/g);
-      // console.log(`fixed line[${index}] (CP936): `);
-      // console.log(array);
-      return array?.join("") || "";
+      const hex = array?.map((line, index) => {
+        const prefixed = "\\u" + Buffer.from(line, "hex").toString("hex");
+        return prefixed;
+      });
+      return !removeSpace ? hex?.join(" ") : hex?.join("");
     });
+  };
 
-    const cp936 = cp936PairHexLines.map(line => {
-      const array = !removeSpace? line.match(/.{4}/g)?.join(' ') : line
-      return array
-    }).join('\n')
-    // console.log(`fixed line compbined: `);
-    // console.log(cp936PairHexLines);
+  const convertGarbled = (garbled: string) => {
+    // Split the garbled text into lines
+    const lines = garbled.split("\n");
+    // Process each line individually
+    const processedLines = lines.map((line: string) => {
+      // Convert the line to UTF-16 representation
+      const utf16 = iconv.encode(line, "utf-16be").toString("hex");
 
-    // Convert UTF-16 pairs to Buffer for each line
-    const buffers = cp936PairHexLines.map((line) => Buffer.from(line, "hex"));
+      // Remove leading zeros and combine UTF-16 pairs
+      const utf16Pairs = utf16?.replace(/00/g, "")?.match(/.{4}/g)?.join("");
 
-    // Decode each Buffer using CP936 encoding
-    const decodedLines = buffers.map((buffer, index) => {
+      // Convert UTF-16 pairs to Buffer
+      const buffer = Buffer.from(utf16Pairs || "", "hex");
+
+      // Decode the Buffer using CP936 encoding
       const decoded = iconv.decode(buffer, "CP936");
-      // console.log(`decoded line[${index}]: ${decoded}`);
-      const decodedLine = !removeSpace ? decoded.split("").join(" ") : decoded;
-      return decodedLine;
+
+      // Return the decoded line
+      return !removeSpace ? decoded.split("").join(" ") : decoded;
     });
 
-    // Join the lines back with newline characters
-    const result = decodedLines.join("\n");
+    const utf16Lines = lines.map((line: string) => {
+      // Convert the line to UTF-16 representation
+      return iconv.encode(line, "utf-16be").toString("hex");
+    });
 
-    // Get the hex representation of the decoded text
-    const decodedTextHex = getHex(decodedLines);
-    const utf16 = decodedTextHex.join("\n");
-
-    // console.log(`finished converting garbled text...`);
-    // console.log("----------------------------------------");
-
+    // Join the processed lines back with newline characters to form the final text
+    const result = processedLines.join("\n");
+    const cp936 = getCP936Hex(utf16Lines).join("\n");
+    const utf16 = getUtfHex(processedLines).join("\n");
     return { result, utf16, cp936 };
   };
 
   const { result, utf16, cp936 } = convertGarbled(input);
-  // console.log(`final text: `);
-  // console.log(result);
-  // console.log(`final hex`);
-  // console.log(utf16);
-  // console.log("----------------------------------------");
-  const formatted = input.split("\n").map((line, index) => {
-    const newLine = removeSpace
-    ? line.replace(/\s/g, "")
-    : line.match(/.{2}/g)?.join(" ");
-    return newLine;
-  }).join('\n');
+
+  const formatted = input
+    .split("\n")
+    .map((line, index) => {
+      const newLine = removeSpace
+        ? line.replace(/\s/g, "")
+        : line.match(/.{2}/g)?.join(" ");
+      return newLine;
+    })
+    .join("\n");
 
   return (
-    <main className="flex min-h-screen flex-col items-center justify-between p-24">
+    <main className="flex min-h-screen flex-col items-center justify-between p-12 md:p-24">
       <div className="z-10 w-full max-w-5xl items-center justify-between font-mono text-sm lg:flex">
         <p className="fixed left-0 top-0 flex w-full justify-center border-b border-gray-300 pb-6 pt-8 backdrop-blur-2xl dark:border-neutral-800 dark:bg-zinc-800/30 dark:from-inherit lg:static lg:w-auto  lg:rounded-xl lg:border lg:bg-gray-200 lg:p-4 lg:dark:bg-zinc-800/30">
           <a href="https://github.com/kyaroru/character-fixer">
@@ -114,134 +102,181 @@ export default function Home() {
           <a href="https://github.com/kyaroru">By @kyaroru</a>
         </div>
       </div>
-      <div className="bear max-w-[60%] lg:max-w-[40%]">
-        <Image src={bear1} alt={"bear"} />
+      <div className="max-w-[60%] lg:max-w-[40%]">
+        <Image priority src={bear1} alt={"bear"} />
       </div>
-      <div>
-        <label
-          htmlFor="original_value"
-          className="block mb-2 text-sm font-medium text-gray-900 dark:text-white"
-        >
-          Garbled Text
-        </label>
-        <textarea
-          inputMode="text"
-          id="original_value"
-          className="bg-gray-50 border border-gray-300 text-gray-900 text-sm rounded-lg focus:border-red-300 focus-visible:outline-0 block w-full p-2.5 dark:bg-gray-700 dark:border-gray-600 dark:placeholder-gray-400 dark:text-white dark:focus:border-red-300"
-          placeholder="Enter your garbled text"
-          defaultValue={input}
-          onChange={(e) => {
-            setInput(e.target.value);
-          }}
-        />
-        <div className="flex">
-          <div className="flex">
-            <input
-              type="radio"
-              radioGroup="space"
-              id="remove_space"
-              className="mr-2"
-              checked={removeSpace}
-              onChange={() => {
-                setRemoveSpace(true);
-              }}
-            />
-            <label htmlFor="remove_space" className="block mt-2 mb-2 text-sm">
-              Remove Space
+
+      <div className="w-[80%]">
+        <div className="flex-col w-full original">
+          <div className="flex justify-between">
+            <label
+              htmlFor="original_value"
+              className="block mb-2 text-sm font-medium text-gray-900 dark:text-white"
+            >
+              Garbled Text
             </label>
+            <div
+              onClick={() => navigator.clipboard.writeText(input)}
+              className="flex text-xs mt-[2px]"
+            >
+              ⎘
+            </div>
           </div>
-          <div className="w-4"></div>
+          <textarea
+            ref={originalTextRef}
+            inputMode="text"
+            id="original_value"
+            className="bg-gray-50 border border-gray-300 text-gray-900 text-sm rounded-lg focus:border-red-300 focus-visible:outline-0 block w-full p-2.5 dark:bg-gray-700 dark:border-gray-600 dark:placeholder-gray-400 dark:text-white dark:focus:border-red-300"
+            placeholder="Enter your garbled text"
+            defaultValue={input}
+            onChange={(e) => {
+              setInput(e.target.value);
+            }}
+          />
           <div className="flex">
-            <input
-              type="radio"
-              radioGroup="space"
-              id="add_space"
-              className="mr-2"
-              checked={!removeSpace}
-              onChange={() => {
-                setRemoveSpace(false);
-              }}
-            />
-            <label htmlFor="add_space" className="block mt-2 mb-2 text-sm">
-              Add Space
-            </label>
+            <div className="flex">
+              <input
+                type="radio"
+                radioGroup="space"
+                id="remove_space"
+                className="mr-2"
+                checked={removeSpace}
+                onChange={() => {
+                  setRemoveSpace(true);
+                }}
+              />
+              <label htmlFor="remove_space" className="block mt-2 mb-2 text-sm">
+                Remove Space
+              </label>
+            </div>
+            <div className="w-4"></div>
+            <div className="flex">
+              <input
+                type="radio"
+                radioGroup="space"
+                id="add_space"
+                className="mr-2"
+                checked={!removeSpace}
+                onChange={() => {
+                  setRemoveSpace(false);
+                }}
+              />
+              <label htmlFor="add_space" className="block mt-2 mb-2 text-sm">
+                Add Space
+              </label>
+            </div>
           </div>
         </div>
-      </div>
-      <div className="relative flex place-items-center ">
-        <div>
-          <label
-            htmlFor="formatted_value"
-            className="block mb-2 text-sm font-medium text-gray-900 dark:text-white"
-          >
-            Formatted Text
-          </label>
+        <div className="md:flex w-full md:space-x-4 processing">
+          <div className="flex flex-1 flex-col">
+            <div className="flex justify-between">
+              <label
+                htmlFor="formatted_value"
+                className="block mb-2 text-sm font-medium text-gray-900 dark:text-white"
+              >
+                Formatted
+              </label>
+              <div
+                onClick={() => navigator.clipboard.writeText(formatted)}
+                className="flex text-xs mt-[2px]"
+              >
+                ⎘
+              </div>
+            </div>
+            <textarea
+              ref={formattedTextRef}
+              inputMode="text"
+              id="formatted_value"
+              className="bg-gray-200 border border-gray-300 text-gray-900 text-sm rounded-lg focus:ring-blue-500 focus:border-blue-500 block w-full p-2.5 dark:bg-gray-700 dark:border-gray-600 dark:placeholder-gray-400 dark:text-white dark:focus:ring-blue-500 dark:focus:border-blue-500"
+              placeholder="Formatted text"
+              value={formatted}
+              disabled
+            />
+          </div>
+
+          <div className="flex flex-1 flex-col">
+            <div className="flex justify-between">
+              <label
+                htmlFor="cp_936_value"
+                className="block mb-2 text-sm font-medium text-gray-900 dark:text-white"
+              >
+                CP936
+              </label>
+              <div
+                onClick={() => navigator.clipboard.writeText(cp936)}
+                className="flex text-xs mt-[2px]"
+              >
+                ⎘
+              </div>
+            </div>
+
+            <textarea
+              ref={cp936TextRef}
+              inputMode="text"
+              id="cp_936_value"
+              className="bg-gray-200 border border-gray-300 text-gray-900 text-sm rounded-lg focus:ring-blue-500 focus:border-blue-500 block w-full p-2.5 dark:bg-gray-700 dark:border-gray-600 dark:placeholder-gray-400 dark:text-white dark:focus:ring-blue-500 dark:focus:border-blue-500"
+              placeholder="CP936"
+              value={cp936}
+              disabled
+            />
+          </div>
+
+          <div className="flex flex-1 flex-col">
+            <div className="flex justify-between">
+              <label
+                htmlFor="utf_16_value"
+                className="block mb-2 text-sm font-medium text-gray-900 dark:text-white"
+              >
+                UTF16
+              </label>
+              <div
+                onClick={() => navigator.clipboard.writeText(utf16)}
+                className="flex text-xs mt-[2px]"
+              >
+                ⎘
+              </div>
+            </div>
+
+            <textarea
+              ref={utf16TextRef}
+              inputMode="text"
+              id="utf_16_value"
+              className="bg-gray-200 border border-gray-300 text-gray-900 text-sm rounded-lg focus:ring-blue-500 focus:border-blue-500 block w-full p-2.5 dark:bg-gray-700 dark:border-gray-600 dark:placeholder-gray-400 dark:text-white dark:focus:ring-blue-500 dark:focus:border-blue-500"
+              placeholder="UTF16"
+              value={utf16}
+              disabled
+            />
+          </div>
+        </div>
+        <div className="flex-col w-full result">
+          <div className="flex justify-between">
+            <label
+              htmlFor="fixed_value"
+              className="block mb-2 text-sm font-medium text-gray-900 dark:text-white"
+            >
+              Fixed Text
+            </label>
+            <div
+              onClick={() => navigator.clipboard.writeText(result)}
+              className="flex text-xs mt-[2px]"
+            >
+              ⎘
+            </div>
+          </div>
           <textarea
+            ref={resultTextRef}
             inputMode="text"
-            id="formatted_value"
-            className="bg-gray-200 border border-gray-300 text-gray-900 text-sm rounded-lg focus:ring-blue-500 focus:border-blue-500 block w-full p-2.5 dark:bg-gray-700 dark:border-gray-600 dark:placeholder-gray-400 dark:text-white dark:focus:ring-blue-500 dark:focus:border-blue-500"
-            placeholder="Formatted text"
-            value={formatted}
+            id="fixed_value"
+            className="bg-gray-100 border border-gray-300 text-gray-900 text-sm rounded-lg ring-green-500 border-green-500 block w-full p-2.5 dark:bg-gray-700 dark:border-gray-600 dark:placeholder-gray-400 dark:text-white dark:ring-green-500 dark:border-green-500"
+            placeholder="Fixed text"
+            value={result}
             disabled
           />
         </div>
-
-        <div className="w-4"></div>
-
-        <div>
-          <label
-            htmlFor="cp_936_value"
-            className="block mb-2 text-sm font-medium text-gray-900 dark:text-white"
-          >
-            CP936
-          </label>
-          <textarea
-            inputMode="text"
-            id="cp_936_value"
-            className="bg-gray-200 border border-gray-300 text-gray-900 text-sm rounded-lg focus:ring-blue-500 focus:border-blue-500 block w-full p-2.5 dark:bg-gray-700 dark:border-gray-600 dark:placeholder-gray-400 dark:text-white dark:focus:ring-blue-500 dark:focus:border-blue-500"
-            placeholder="CP936"
-            value={cp936}
-            disabled
-          />
-        </div>
-
-        <div className="w-4"></div>
-
-        <div>
-          <label
-            htmlFor="utf_16_value"
-            className="block mb-2 text-sm font-medium text-gray-900 dark:text-white"
-          >
-            UTF16
-          </label>
-          <textarea
-            inputMode="text"
-            id="utf_16_value"
-            className="bg-gray-200 border border-gray-300 text-gray-900 text-sm rounded-lg focus:ring-blue-500 focus:border-blue-500 block w-full p-2.5 dark:bg-gray-700 dark:border-gray-600 dark:placeholder-gray-400 dark:text-white dark:focus:ring-blue-500 dark:focus:border-blue-500"
-            placeholder="UTF16"
-            value={utf16}
-            disabled
-          />
-        </div>
       </div>
-      <div>
-        <label
-          htmlFor="fixed_value"
-          className="block mb-2 text-sm font-medium text-gray-900 dark:text-white"
-        >
-          Fixed Text
-        </label>
-        <textarea
-          inputMode="text"
-          id="fixed_value"
-          className="bg-gray-100 border border-gray-300 text-gray-900 text-sm rounded-lg ring-green-500 border-green-500 block w-full p-2.5 dark:bg-gray-700 dark:border-gray-600 dark:placeholder-gray-400 dark:text-white dark:ring-green-500 dark:border-green-500"
-          placeholder="Fixed text"
-          value={result}
-          disabled
-        />
-      </div>
+
       <div className="mt-4 mb-8">Enjoy your day!</div>
-      <div>
+      <div className="text-center">
         Credits goes to{" "}
         <a
           className="text-pink-400"
