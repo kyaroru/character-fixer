@@ -168,7 +168,7 @@ export default function Home() {
           </div>
         </div>
         <div className="md:flex w-full md:space-x-4 processing">
-          <div className="flex flex-1 flex-col">
+          <div className="flex flex-1 flex-col mt-4">
             <div className="flex justify-between">
               <label
                 htmlFor="formatted_value"
@@ -194,7 +194,7 @@ export default function Home() {
             />
           </div>
 
-          <div className="flex flex-1 flex-col">
+          <div className="flex flex-1 flex-col mt-4">
             <div className="flex justify-between">
               <label
                 htmlFor="cp_936_value"
@@ -221,7 +221,7 @@ export default function Home() {
             />
           </div>
 
-          <div className="flex flex-1 flex-col">
+          <div className="flex flex-1 flex-col mt-4">
             <div className="flex justify-between">
               <label
                 htmlFor="utf_16_value"
@@ -248,7 +248,7 @@ export default function Home() {
             />
           </div>
         </div>
-        <div className="flex-col w-full result">
+        <div className="flex-col w-full result mt-4">
           <div className="flex justify-between">
             <label
               htmlFor="fixed_value"
