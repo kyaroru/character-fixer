@@ -2,17 +2,13 @@
 
 import Image from "next/image";
 import iconv from "iconv-lite";
-import { useRef, useState } from "react";
+import { useState } from "react";
 import bear1 from "public/images/bear1.png";
+import { toast, ToastContainer } from 'react-nextjs-toast'
 
 export default function Home() {
   const [input, setInput] = useState("ÄãºÃÎÒÊÇ¼ÒÀÖ");
   const [removeSpace, setRemoveSpace] = useState(true);
-  const originalTextRef = useRef(null);
-  const formattedTextRef = useRef(null);
-  const cp936TextRef = useRef(null);
-  const utf16TextRef = useRef(null);
-  const resultTextRef = useRef(null);
 
   const getUtfHex = (lines: string[]) => {
     return lines.map((line, index) => {
@@ -45,25 +41,82 @@ export default function Home() {
     });
   };
 
+  const decodeChineseCharacters = (text: string) => {
+    // Convert the line to UTF-16 representation
+    const utf16 = iconv.encode(text, "utf-16be").toString("hex");
+
+    // Remove leading zeros and combine UTF-16 pairs
+    const utf16Pairs = utf16?.replace(/00/g, "")?.match(/.{4}/g)?.join("");
+
+    // Convert UTF-16 pairs to Buffer
+    const buffer = Buffer.from(utf16Pairs || "", "hex");
+    const isCorrectChineseAlready = /[\u4e00-\u9fff]/g.test(text);
+
+    if (isCorrectChineseAlready) {
+      return text; // already correct chinese, no need to decode
+    }
+    // Decode the Buffer using CP936 encoding
+    const decoded = iconv.decode(buffer, "CP936");
+
+    return decoded;
+  };
+
+
   const convertGarbled = (garbled: string) => {
     // Split the garbled text into lines
     const lines = garbled.split("\n");
-    // Process each line individually
-    const processedLines = lines.map((line: string) => {
-      // Convert the line to UTF-16 representation
-      const utf16 = iconv.encode(line, "utf-16be").toString("hex");
 
-      // Remove leading zeros and combine UTF-16 pairs
-      const utf16Pairs = utf16?.replace(/00/g, "")?.match(/.{4}/g)?.join("");
+    const processedLines = lines.map((line) => {
+      const decodedParts = [];
+      let currentPart = "";
+      let inChinese = false;
 
-      // Convert UTF-16 pairs to Buffer
-      const buffer = Buffer.from(utf16Pairs || "", "hex");
+      for (let i = 0; i < line.length; i++) {
+        const char = line[i];
 
-      // Decode the Buffer using CP936 encoding
-      const decoded = iconv.decode(buffer, "CP936");
+        if (/[^\x00-\x7F]/.test(char)) {
+          // Chinese character found
+          if (!inChinese) {
+            // Start of Chinese characters
+            inChinese = true;
+            if (currentPart) {
+              const currentPartStr = removeSpace ? currentPart.split("").join("") : currentPart.split("").join(" ")
+              decodedParts.push(currentPartStr);
+              currentPart = "";
+            }
+          }
 
-      // Return the decoded line
-      return !removeSpace ? decoded.split("").join(" ") : decoded;
+          currentPart += char;
+
+          if (i === line.length - 1) {
+            // Last character is a Chinese character
+            const decoded = decodeChineseCharacters(currentPart);
+            const decodedStr = removeSpace ? decoded.split("").join("") : decoded.split("").join(" ")
+            decodedParts.push(decodedStr);
+            currentPart = "";
+            inChinese = false;
+          }
+        } else {
+          // Non-Chinese character found
+          if (inChinese) {
+            // End of Chinese characters
+            const decoded = decodeChineseCharacters(currentPart);
+            const decodedStr = removeSpace ? decoded.split("").join("") : decoded.split("").join(" ")
+            decodedParts.push(decodedStr);
+            currentPart = "";
+            inChinese = false;
+          }
+
+          currentPart += char;
+
+          if (i === line.length - 1) {
+            // Last character is a non-Chinese character
+            const currentPartStr = removeSpace ? currentPart.split("").join("") : currentPart.split("").join(" ")
+            decodedParts.push(currentPartStr);
+          }
+        }
+      }
+      return decodedParts.join("") ;
     });
 
     const utf16Lines = lines.map((line: string) => {
@@ -80,16 +133,14 @@ export default function Home() {
 
   const { result, utf16, cp936 } = convertGarbled(input);
 
-  const formatted = input
-    .split("\n")
-    .map((line, index) => {
-      const newLine = removeSpace
-        ? line.replace(/\s/g, "")
-        : line.match(/.{2}/g)?.join(" ");
-      return newLine;
-    })
-    .join("\n");
-
+  const onCopy = async (text: string) => {
+    await navigator.clipboard.writeText(text);
+    toast.notify('Copied to clipboard!', {
+      duration: 2,
+      type: "success",
+      title: "Success",
+    });
+  };
   return (
     <main className="flex min-h-screen flex-col items-center justify-between p-12 md:p-24">
       <div className="z-10 w-full max-w-5xl items-center justify-between font-mono text-sm lg:flex">
@@ -98,11 +149,11 @@ export default function Home() {
             Fix your garbled mandarin text
           </a>
         </p>
-        <div className="fixed bottom-0 left-0 flex h-48 w-full items-end justify-center dark:from-black dark:via-black lg:static lg:h-auto lg:w-auto lg:bg-none">
+        <div className="fixed bottom-4 left-0 flex h-48 w-full items-end justify-center dark:from-black dark:via-black lg:static lg:h-auto lg:w-auto lg:bg-none">
           <a href="https://github.com/kyaroru">By @kyaroru</a>
         </div>
       </div>
-      <div className="max-w-[60%] lg:max-w-[40%]">
+      <div className="max-w-[60%] lg:max-w-[40%] mt-6">
         <Image priority src={bear1} alt={"bear"} />
       </div>
 
@@ -116,14 +167,13 @@ export default function Home() {
               Garbled Text
             </label>
             <div
-              onClick={() => navigator.clipboard.writeText(input)}
+              onClick={() => onCopy(input)}
               className="flex text-xs mt-[2px]"
             >
               ⎘
             </div>
           </div>
           <textarea
-            ref={originalTextRef}
             inputMode="text"
             id="original_value"
             className="bg-gray-50 border border-gray-300 text-gray-900 text-sm rounded-lg focus:border-red-300 focus-visible:outline-0 block w-full p-2.5 dark:bg-gray-700 dark:border-gray-600 dark:placeholder-gray-400 dark:text-white dark:focus:border-red-300"
@@ -171,39 +221,13 @@ export default function Home() {
           <div className="flex flex-1 flex-col mt-4">
             <div className="flex justify-between">
               <label
-                htmlFor="formatted_value"
-                className="block mb-2 text-sm font-medium text-gray-900 dark:text-white"
-              >
-                Formatted
-              </label>
-              <div
-                onClick={() => navigator.clipboard.writeText(formatted)}
-                className="flex text-xs mt-[2px]"
-              >
-                ⎘
-              </div>
-            </div>
-            <textarea
-              ref={formattedTextRef}
-              inputMode="text"
-              id="formatted_value"
-              className="bg-gray-200 border border-gray-300 text-gray-900 text-sm rounded-lg focus:ring-blue-500 focus:border-blue-500 block w-full p-2.5 dark:bg-gray-700 dark:border-gray-600 dark:placeholder-gray-400 dark:text-white dark:focus:ring-blue-500 dark:focus:border-blue-500"
-              placeholder="Formatted text"
-              value={formatted}
-              disabled
-            />
-          </div>
-
-          <div className="flex flex-1 flex-col mt-4">
-            <div className="flex justify-between">
-              <label
                 htmlFor="cp_936_value"
                 className="block mb-2 text-sm font-medium text-gray-900 dark:text-white"
               >
                 CP936
               </label>
               <div
-                onClick={() => navigator.clipboard.writeText(cp936)}
+                onClick={() => onCopy(cp936)}
                 className="flex text-xs mt-[2px]"
               >
                 ⎘
@@ -211,7 +235,6 @@ export default function Home() {
             </div>
 
             <textarea
-              ref={cp936TextRef}
               inputMode="text"
               id="cp_936_value"
               className="bg-gray-200 border border-gray-300 text-gray-900 text-sm rounded-lg focus:ring-blue-500 focus:border-blue-500 block w-full p-2.5 dark:bg-gray-700 dark:border-gray-600 dark:placeholder-gray-400 dark:text-white dark:focus:ring-blue-500 dark:focus:border-blue-500"
@@ -230,7 +253,7 @@ export default function Home() {
                 UTF16
               </label>
               <div
-                onClick={() => navigator.clipboard.writeText(utf16)}
+                onClick={() => onCopy(utf16)}
                 className="flex text-xs mt-[2px]"
               >
                 ⎘
@@ -238,7 +261,6 @@ export default function Home() {
             </div>
 
             <textarea
-              ref={utf16TextRef}
               inputMode="text"
               id="utf_16_value"
               className="bg-gray-200 border border-gray-300 text-gray-900 text-sm rounded-lg focus:ring-blue-500 focus:border-blue-500 block w-full p-2.5 dark:bg-gray-700 dark:border-gray-600 dark:placeholder-gray-400 dark:text-white dark:focus:ring-blue-500 dark:focus:border-blue-500"
@@ -257,14 +279,13 @@ export default function Home() {
               Fixed Text
             </label>
             <div
-              onClick={() => navigator.clipboard.writeText(result)}
+              onClick={() => onCopy(result)}
               className="flex text-xs mt-[2px]"
             >
               ⎘
             </div>
           </div>
           <textarea
-            ref={resultTextRef}
             inputMode="text"
             id="fixed_value"
             className="bg-gray-100 border border-gray-300 text-gray-900 text-sm rounded-lg ring-green-500 border-green-500 block w-full p-2.5 dark:bg-gray-700 dark:border-gray-600 dark:placeholder-gray-400 dark:text-white dark:ring-green-500 dark:border-green-500"
@@ -276,7 +297,7 @@ export default function Home() {
       </div>
 
       <div className="mt-4 mb-8">Enjoy your day!</div>
-      <div className="text-center">
+      <div className="text-center mb-4">
         Credits goes to{" "}
         <a
           className="text-pink-400"
@@ -286,6 +307,7 @@ export default function Home() {
         </a>{" "}
         for the explanation!{" "}
       </div>
+      <ToastContainer align={"right"} position="bottom"/>
     </main>
   );
 }
